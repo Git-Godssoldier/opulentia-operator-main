@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Denis Design Language - Color Configurations */
+:root {
+  /* Core Denis Color Palette */
+  --radius: 0.625rem;
+  --background: #0F0F0F;
+  --foreground: #EFEFEF;
+  --card: #141414;
+  --card-foreground: #EFEFEF;
+  --popover: #141414;
+  --popover-foreground: #EFEFEF;
+  --primary: #1B1B1B;
+  --primary-foreground: #EFEFEF;
+  --secondary: #141414;
+  --secondary-foreground: #EFEFEF;
+  --muted: #141414;
+  --muted-foreground: #C0C0C0;
+  --accent: #FFAA6E;
+  --accent-foreground: #0F0F0F;
+  --destructive: #FF4444;
+  --destructive-foreground: #EFEFEF;
+  --border: #080808;
+  --input: #1B1B1B;
+  --ring: #FFAA6E;
+  
+  /* Chart Colors */
+  --chart-1: #FFAA6E;
+  --chart-2: #FF6B6B;
+  --chart-3: #4ECDC4;
+  --chart-4: #45B7D1;
+  --chart-5: #FFA07A;
+  
+  /* Sidebar Colors */
+  --sidebar: #141414;
+  --sidebar-foreground: #EFEFEF;
+  --sidebar-primary: #1B1B1B;
+  --sidebar-primary-foreground: #EFEFEF;
+  --sidebar-accent: #FFAA6E;
+  --sidebar-accent-foreground: #0F0F0F;
+  --sidebar-border: #080808;
+  --sidebar-ring: #FFAA6E;
+}
+
+.dark {
+  --radius: 1.3rem;
+  --background: #0F0F0F;
+  --foreground: #EFEFEF;
+  --card: #141414;
+  --card-foreground: #EFEFEF;
+  --popover: #0F0F0F;
+  --popover-foreground: #EFEFEF;
+  --primary: #1B1B1B;
+  --primary-foreground: #EFEFEF;
+  --secondary: #141414;
+  --secondary-foreground: #EFEFEF;
+  --muted: #141414;
+  --muted-foreground: #C0C0C0;
+  --accent: #FFAA6E;
+  --accent-foreground: #0F0F0F;
+  --destructive: #FF4444;
+  --destructive-foreground: #EFEFEF;
+  --border: #080808;
+  --input: #1B1B1B;
+  --ring: #FFAA6E;
+  --chart-1: #FFAA6E;
+  --chart-2: #FF6B6B;
+  --chart-3: #4ECDC4;
+  --chart-4: #45B7D1;
+  --chart-5: #FFA07A;
+  --sidebar: #141414;
+  --sidebar-foreground: #EFEFEF;
+  --sidebar-primary: #1B1B1B;
+  --sidebar-primary-foreground: #EFEFEF;
+  --sidebar-accent: #FFAA6E;
+  --sidebar-accent-foreground: #0F0F0F;
+  --sidebar-border: #080808;
+  --sidebar-ring: #FFAA6E;
+}
+
+@theme {
+  --color-primary: #FFAA6E;
+  --text-color-button: #EFEFEF;
+  --text-color-button-hover: #C0C0C0;
+  --background-color-body: #0F0F0F;
+  --background-color-button: #1B1B1B;
+  --background-color-button-hover: #141414;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-gray-200, #080808);
+  }
+  
+  body {
+    color: #EFEFEF;
+    background-color: var(--background);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+}

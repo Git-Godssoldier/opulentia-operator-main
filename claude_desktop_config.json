@@ -1,0 +1,93 @@
+{
+  "mcpServers": {
+    "search-brave": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {
+        "BRAVE_SEARCH_API_KEY": "your_brave_search_api_key_here"
+      }
+    },
+    "web-puppeteer": {
+      "command": "npx", 
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+      "env": {}
+    },
+    "web-puppeteer-alt": {
+      "command": "npx", 
+      "args": ["-y", "puppeteer-mcp-server"],
+      "env": {}
+    },
+    "memory-graph": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "env": {}
+    },
+    "postgres-supabase": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "env": {
+        "POSTGRES_CONNECTION_STRING": "postgres://postgres.nxohsklmwjzfqvqjouis:x6SJ55aDRMDYYFEi@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require"
+      }
+    },
+    "redis-cache": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-redis"],
+      "env": {
+        "REDIS_URL": "your_redis_url_here"
+      }
+    },
+    "github-integration": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "your_github_token_here"
+      }
+    },
+    "slack-integration": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-slack"],
+      "env": {
+        "SLACK_BOT_TOKEN": "your_slack_bot_token_here",
+        "SLACK_USER_TOKEN": "your_slack_user_token_here"
+      }
+    },
+    "filesystem-access": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+      "env": {
+        "ALLOWED_DIRECTORIES": "/Users/kingopulentia/Downloads/SuperPowers/opulentia-operator-main"
+      }
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "env": {}
+    },
+    "google-maps": {
+      "command": "npx", 
+      "args": ["-y", "@modelcontextprotocol/server-google-maps"],
+      "env": {
+        "GOOGLE_MAPS_API_KEY": "your_google_maps_key_here"
+      }
+    },
+    "everart-ai": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-everart"],
+      "env": {
+        "EVERART_API_KEY": "your_everart_api_key_here"
+      }
+    },
+    "figma-design": {
+      "command": "npx",
+      "args": ["-y", "figma-mcp"],
+      "env": {
+        "FIGMA_ACCESS_TOKEN": "your_figma_token_here"
+      }
+    },
+    "everything-demo": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-everything"],
+      "env": {}
+    }
+  }
+}
