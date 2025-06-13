@@ -44,13 +44,15 @@ async function runStagehand({
     switch (method) {
       case "GOTO":
         await page.goto(instruction!, {
-          waitUntil: "commit",
+          waitUntil: "networkidle",
           timeout: 60000,
         });
+        await page.waitForLoadState("networkidle");
         break;
 
       case "ACT":
         await page.act(instruction!);
+        await page.waitForLoadState("networkidle");
         break;
 
       case "EXTRACT": {
