@@ -18,15 +18,15 @@ export type ToolCallPart = {
     id?: string;
     toolCallId: string;
     toolName: string;
-    safetyChecks?: any[];
-    args: Record<string, any>;
+    safetyChecks?: unknown[];
+    args: Record<string, unknown>;
 };
 
 export type ToolResultPart = {
     type: "tool-result";
     toolCallId: string;
     toolName: string;
-    result: any;
+    result: unknown;
     isError?: boolean;
 };
 
@@ -80,6 +80,18 @@ export type Step = {
     usage?: TokenUsage;
 };
 
+export type BrowserAction = {
+    status: "before" | "after";
+    command: "go_to" | "get_html" | "evaluate" | "click" | "type" | "screenshot" | "get_text" | "get_attribute";
+    url?: string;
+    selector?: string;
+    code?: string;
+    text?: string;
+    timeout?: number;
+    attribute?: string;
+    result?: unknown;
+};
+
 export type SingleActRequest = {
     model: Model;
     system?: string;
@@ -112,15 +124,15 @@ type ApiToolCallPart = {
     id?: string;
     tool_call_id: string;
     tool_name: string;
-    safety_checks?: any[];
-    args: Record<string, any>;
+    safety_checks?: unknown[];
+    args: Record<string, unknown>;
 };
 
 type ApiToolResultPart = {
     type: "tool-result";
     tool_call_id: string;
     tool_name: string;
-    result: any;
+    result: unknown;
     is_error?: boolean;
 };
 
@@ -163,7 +175,7 @@ type ApiTokenUsage = {
 };
 
 type ApiTool = Omit<Tool, "parameters"> & {
-    parameters: Record<string, any>;
+    parameters: Record<string, unknown>;
 };
 
 export type ApiSingleActRequest = {

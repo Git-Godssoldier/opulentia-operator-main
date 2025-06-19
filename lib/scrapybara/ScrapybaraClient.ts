@@ -17,6 +17,7 @@ import {
     convertResponseToSdk,
     ActResponse,
     ReasoningPart,
+    BrowserAction,
 } from "./api/types/Act";
 import * as core from "./core";
 import * as errors from "./errors";
@@ -36,6 +37,7 @@ import {
     STRUCTURED_OUTPUT_SECTION as ANTHROPIC_STRUCTURED_OUTPUT_SECTION,
 } from "./anthropic";
 import { chromium, Browser as PlaywrightBrowser, BrowserContext, Page } from "playwright";
+import { Blob } from "buffer";
 
 function structuredOutputTool<T extends z.ZodType>(schema: T) {
     return {
@@ -49,10 +51,8 @@ function structuredOutputTool<T extends z.ZodType>(schema: T) {
     };
 }
 
-export declare namespace ScrapybaraClient {
-    type Options = FernClient.Options;
-    type RequestOptions = FernClient.RequestOptions;
-}
+export type ScrapybaraClientOptions = FernClient.Options;
+export type ScrapybaraClientRequestOptions = FernClient.RequestOptions;
 
 export class Beta {
     constructor(
@@ -61,21 +61,21 @@ export class Beta {
 
     public async takeSnapshot(
         instanceId: string,
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.SnapshotResponse> {
         return await this.fern.betaVmManagement.takeSnapshot(instanceId, requestOptions);
     }
 
     public async warmupSnapshot(
         snapshotId: string, 
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.SuccessResponse> {
         return await this.fern.betaVmManagement.warmupSnapshot(snapshotId, requestOptions);
     }
 
     public async deleteSnapshot(
         snapshotId: string,
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.SuccessResponse> {
         return await this.fern.betaVmManagement.deleteSnapshot(snapshotId, requestOptions);
     }
@@ -85,7 +85,7 @@ export class ScrapybaraClient {
     private _fern: FernClient;
     private _beta: Beta | undefined;
 
-    constructor(readonly _options?: ScrapybaraClient.Options) {
+    constructor(readonly _options?: ScrapybaraClientOptions) {
         this._fern = new FernClient(_options);
     }
 
@@ -95,7 +95,7 @@ export class ScrapybaraClient {
 
     public async startUbuntu(
         request: Omit<Scrapybara.DeploymentConfig, "instanceType"> = {},
-        requestOptions?: ScrapybaraClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<UbuntuInstance> {
         const response = await this._fern.start({ ...request, instanceType: "ubuntu" }, requestOptions);
         return new UbuntuInstance(response.id, response.launchTime, response.status, this._fern);
@@ -103,7 +103,7 @@ export class ScrapybaraClient {
 
     public async startBrowser(
         request: Omit<Scrapybara.DeploymentConfig, "instanceType"> = {},
-        requestOptions?: ScrapybaraClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<BrowserInstance> {
         const response = await this._fern.start({ ...request, instanceType: "browser" }, requestOptions);
         return new BrowserInstance(response.id, response.launchTime, response.status, this._fern);
@@ -111,7 +111,7 @@ export class ScrapybaraClient {
 
     public async startWindows(
         request: Omit<Scrapybara.DeploymentConfig, "instanceType"> = {},
-        requestOptions?: ScrapybaraClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<WindowsInstance> {
         const response = await this._fern.start({ ...request, instanceType: "windows" }, requestOptions);
         return new WindowsInstance(response.id, response.launchTime, response.status, this._fern);
@@ -119,7 +119,7 @@ export class ScrapybaraClient {
 
     public async get(
         instanceId: string,
-        requestOptions?: ScrapybaraClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<UbuntuInstance | BrowserInstance | WindowsInstance> {
         const response = await this._fern.get(instanceId, requestOptions);
         switch (response.instanceType) {
@@ -135,7 +135,7 @@ export class ScrapybaraClient {
     }
 
     public async getInstances(
-        requestOptions?: ScrapybaraClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<(UbuntuInstance | BrowserInstance | WindowsInstance)[]> {
         const response = await this._fern.getInstances(requestOptions);
         return response.map((instance) => {
@@ -153,7 +153,7 @@ export class ScrapybaraClient {
     }
 
     public async getAuthStates(
-        requestOptions?: ScrapybaraClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.AuthStateResponse[]> {
         const response = await this._fern.getAuthStates(requestOptions);
         return response;
@@ -188,6 +188,7 @@ export class ScrapybaraClient {
         onAssistantMessage,
         onToolMessage,
         onStep,
+        onBrowserAction,
         temperature,
         maxTokens,
         imagesToKeep = 4,
@@ -202,10 +203,11 @@ export class ScrapybaraClient {
         onAssistantMessage?: (message: AssistantMessage) => void | Promise<void>;
         onToolMessage?: (message: ToolMessage) => void | Promise<void>;
         onStep?: (step: Step) => void | Promise<void>;
+        onBrowserAction?: (action: BrowserAction) => void | Promise<void>;
         temperature?: number;
         maxTokens?: number;
         imagesToKeep?: number;
-        requestOptions?: ScrapybaraClient.RequestOptions;
+        requestOptions?: ScrapybaraClientRequestOptions;
     }): Promise<ActResponse<z.infer<T>>> {
         const resultMessages: Message[] = [];
         const steps: Step[] = [];
@@ -227,6 +229,7 @@ export class ScrapybaraClient {
             onAssistantMessage,
             onToolMessage,
             onStep,
+            onBrowserAction,
             temperature,
             maxTokens,
             imagesToKeep,
@@ -318,6 +321,7 @@ export class ScrapybaraClient {
         onAssistantMessage,
         onToolMessage,
         onStep,
+        onBrowserAction,
         temperature,
         maxTokens,
         imagesToKeep = 4,
@@ -332,10 +336,11 @@ export class ScrapybaraClient {
         onAssistantMessage?: (message: AssistantMessage) => void | Promise<void>;
         onToolMessage?: (message: ToolMessage) => void | Promise<void>;
         onStep?: (step: Step) => void | Promise<void>;
+        onBrowserAction?: (action: BrowserAction) => void | Promise<void>;
         temperature?: number;
         maxTokens?: number;
         imagesToKeep?: number;
-        requestOptions?: ScrapybaraClient.RequestOptions;
+        requestOptions?: ScrapybaraClientRequestOptions;
     }): AsyncGenerator<Step, void, unknown> {
         let currentMessages: Message[] = [];
         if (!messages) {
@@ -529,6 +534,13 @@ export class ScrapybaraClient {
                     const tool = currentTools.find((t) => t.name === part.toolName);
                     if (!tool) continue;
 
+                    if (onBrowserAction && tool.name === "browser") {
+                        await onBrowserAction({
+                            status: "before",
+                            ...(part.args as BrowserCommand),
+                        });
+                    }
+
                     try {
                         const result = await tool.execute(part.args);
                         toolResults.push({
@@ -540,12 +552,19 @@ export class ScrapybaraClient {
                         if (part.toolName === "structured_output") {
                             hasStructuredOutput = true;
                         }
-                    } catch (error: any) {
+                        if (onBrowserAction && tool.name === "browser") {
+                            await onBrowserAction({
+                                status: "after",
+                                ...(part.args as BrowserCommand),
+                                result,
+                            });
+                        }
+                    } catch (error: unknown) {
                         toolResults.push({
                             type: "tool-result",
                             toolCallId: part.toolCallId,
                             toolName: part.toolName,
-                            result: error?.message || String(error),
+                            result: error instanceof Error ? error.message : String(error),
                             isError: true,
                         });
                     }
@@ -619,35 +638,35 @@ export class BaseInstance {
     }
 
     public async screenshot(
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.InstanceScreenshotResponse> {
         return await this.fern.instance.screenshot(this.id, requestOptions);
     }
 
     public async getStreamUrl(
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.InstanceGetStreamUrlResponse> {
         return await this.fern.instance.getStreamUrl(this.id, requestOptions);
     }
 
     public async computer(
         request: Scrapybara.Request,
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.ComputerResponse> {
         return await this.fern.instance.computer(this.id, request, requestOptions);
     }
 
-    public async stop(requestOptions?: FernClient.RequestOptions): Promise<Scrapybara.StopInstanceResponse> {
+    public async stop(requestOptions?: ScrapybaraClientRequestOptions): Promise<Scrapybara.StopInstanceResponse> {
         return await this.fern.instance.stop(this.id, requestOptions);
     }
 
-    public async pause(requestOptions?: FernClient.RequestOptions): Promise<Scrapybara.StopInstanceResponse> {
+    public async pause(requestOptions?: ScrapybaraClientRequestOptions): Promise<Scrapybara.StopInstanceResponse> {
         return await this.fern.instance.pause(this.id, requestOptions);
     }
 
     public async resume(
         request: Scrapybara.InstanceResumeRequest = {},
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.GetInstanceResponse> {
         return await this.fern.instance.resume(this.id, request, requestOptions);
     }
@@ -657,7 +676,7 @@ export class BaseInstance {
      */
     public async rescheduleTermination(
         request: Scrapybara.InstanceRescheduleTerminationRequest = {},
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.StopInstanceResponse> {
         return await this.fern.instance.rescheduleTermination(this.id, request, requestOptions);
     }
@@ -666,9 +685,9 @@ export class BaseInstance {
      * Upload a file to the instance
      */
     public async upload(
-        file: File | Blob | any,
+        file: File | Blob,
         request: Scrapybara.BodyUploadV1InstanceInstanceIdUploadPost,
-        requestOptions?: FernClient.RequestOptions
+        requestOptions?: ScrapybaraClientRequestOptions
     ): Promise<Scrapybara.UploadResponse> {
         return await this.fern.instance.upload(file, this.id, request, requestOptions);
     }
@@ -678,7 +697,7 @@ export class BaseInstance {
      */
     public async exposePort(
         request: Scrapybara.ExposePortRequest,
-        requestOptions?: FernClient.RequestOptions
+        requestOptions?: ScrapybaraClientRequestOptions
     ): Promise<Scrapybara.ExposePortResponse> {
         return await this.fern.instance.exposePort(this.id, request, requestOptions);
     }
@@ -688,7 +707,7 @@ export class BaseInstance {
      */
     public async deployToNetlify(
         request: Scrapybara.NetlifyDeployRequest,
-        requestOptions?: FernClient.RequestOptions
+        requestOptions?: ScrapybaraClientRequestOptions
     ): Promise<Scrapybara.NetlifyDeployResponse> {
         return await this.fern.instance.deployToNetlify(this.id, request, requestOptions);
     }
@@ -710,21 +729,21 @@ export class UbuntuInstance extends BaseInstance {
 
     public async bash(
         request: Scrapybara.BashRequest = {},
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.BashResponse> {
         return await this.fern.instance.bash(this.id, request, requestOptions);
     }
 
     public async edit(
         request: Scrapybara.EditRequest,
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.EditResponse> {
         return await this.fern.instance.edit(this.id, request, requestOptions);
     }
 
     public async file(
         request: Scrapybara.FileRequest,
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.FileResponse> {
         return await this.fern.instance.file(this.id, request, requestOptions);
     }
@@ -741,14 +760,14 @@ export class BrowserInstance extends BaseInstance {
 
     public async browser(
         request: BrowserCommand,
-        requestOptions?: FernClient.RequestOptions,
-    ): Promise<any> {
+        requestOptions?: ScrapybaraClientRequestOptions,
+    ): Promise<{ result: unknown; screenshot: string }> {
         if (!this._pwBrowser) {
             const { cdpUrl } = await this.fern.browser.getCdpUrl(this.id, requestOptions);
             this._pwBrowser = await chromium.connectOverCDP(cdpUrl);
             const contexts = this._pwBrowser.contexts();
             this._pwContext = contexts.length > 0 ? contexts[0] : await this._pwBrowser.newContext();
-            this._pwPage = this._pwContext.pages()[0] ?? await this._pwContext.newPage();
+            this._pwPage = this._pwContext.pages()[0] ?? (await this._pwContext.newPage());
         }
         if (!this._pwPage) {
             if (!this._pwContext) throw new Error("Browser context not initialized");
@@ -756,71 +775,86 @@ export class BrowserInstance extends BaseInstance {
         }
 
         const timeout = request.timeout;
+        let result: unknown;
         switch (request.command) {
             case "go_to":
                 if (!request.url) throw new Error("Missing 'url' for go_to command");
-                return await this._pwPage.goto(request.url, { timeout });
+                result = await this._pwPage.goto(request.url, { timeout });
+                break;
             case "get_html":
-                return await this._pwPage.content();
+                result = await this._pwPage.content();
+                break;
             case "evaluate":
                 if (request.code === undefined) throw new Error("Missing 'code' for evaluate command");
-                return await this._pwPage.evaluate(request.code);
+                result = await this._pwPage.evaluate(request.code);
+                break;
             case "click":
                 if (!request.selector) throw new Error("Missing 'selector' for click command");
-                return await this._pwPage.click(request.selector, { timeout });
+                result = await this._pwPage.click(request.selector, { timeout });
+                break;
             case "type":
                 if (!request.selector) throw new Error("Missing 'selector' for type command");
                 if (request.text === undefined) throw new Error("Missing 'text' for type command");
-                return await this._pwPage.type(request.selector, request.text, { timeout });
+                result = await this._pwPage.type(request.selector, request.text, { timeout });
+                break;
             case "get_text":
                 if (!request.selector) throw new Error("Missing 'selector' for get_text command");
-                return await this._pwPage.textContent(request.selector);
+                result = await this._pwPage.textContent(request.selector);
+                break;
             case "get_attribute":
                 if (!request.selector) throw new Error("Missing 'selector' for get_attribute command");
                 if (!request.attribute) throw new Error("Missing 'attribute' for get_attribute command");
-                return await this._pwPage.getAttribute(request.selector, request.attribute);
+                result = await this._pwPage.getAttribute(request.selector, request.attribute);
+                break;
             case "screenshot": {
                 const buffer = await this._pwPage.screenshot({ timeout });
-                return buffer.toString("base64");
+                result = buffer.toString("base64");
+                break;
             }
             default:
                 throw new Error(`Unsupported browser command: ${request.command}`);
         }
+
+        const screenshot = await this._pwPage.screenshot({ timeout });
+        return {
+            result,
+            screenshot: screenshot.toString("base64"),
+        };
     }
 
-    public async getCdpUrl(requestOptions?: FernClient.RequestOptions): Promise<Scrapybara.BrowserGetCdpUrlResponse> {
+    public async getCdpUrl(requestOptions?: ScrapybaraClientRequestOptions): Promise<Scrapybara.BrowserGetCdpUrlResponse> {
         return await this.fern.browser.getCdpUrl(this.id, requestOptions);
     }
 
     public async getCurrentUrl(
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.BrowserGetCurrentUrlResponse> {
         return await this.fern.browser.getCurrentUrl(this.id, requestOptions);
     }
 
     public async saveAuth(
         request: Scrapybara.BrowserSaveAuthRequest,
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.SaveBrowserAuthResponse> {
         return await this.fern.browser.saveAuth(this.id, request, requestOptions);
     }
 
     public async modifyAuth(
         request: Scrapybara.BrowserModifyAuthRequest,
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.ModifyBrowserAuthResponse> {
         return await this.fern.browser.modifyAuth(this.id, request, requestOptions);
     }
 
     public async authenticate(
         request: Scrapybara.BrowserAuthenticateRequest,
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.BrowserAuthenticateResponse> {
         return await this.fern.browser.authenticate(this.id, request, requestOptions);
     }
 
     public async getStreamUrl(
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.BrowserGetStreamUrlResponse> {
         return await this.fern.browser.getStreamUrl(this.id, requestOptions);
     }
@@ -838,48 +872,48 @@ export class Browser {
         private readonly fern: FernClient,
     ) {}
 
-    public async start(request: Scrapybara.BrowserStartRequest = {}, requestOptions?: FernClient.RequestOptions): Promise<Scrapybara.StartBrowserResponse> {
+    public async start(request: Scrapybara.BrowserStartRequest = {}, requestOptions?: ScrapybaraClientRequestOptions): Promise<Scrapybara.StartBrowserResponse> {
         return await this.fern.browser.start(this.instanceId, request, requestOptions);
     }
 
-    public async getCdpUrl(requestOptions?: FernClient.RequestOptions): Promise<Scrapybara.BrowserGetCdpUrlResponse> {
+    public async getCdpUrl(requestOptions?: ScrapybaraClientRequestOptions): Promise<Scrapybara.BrowserGetCdpUrlResponse> {
         return await this.fern.browser.getCdpUrl(this.instanceId, requestOptions);
     }
 
     public async getCurrentUrl(
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.BrowserGetCurrentUrlResponse> {
         return await this.fern.browser.getCurrentUrl(this.instanceId, requestOptions);
     }
 
     public async saveAuth(
         request: Scrapybara.BrowserSaveAuthRequest,
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.SaveBrowserAuthResponse> {
         return await this.fern.browser.saveAuth(this.instanceId, request, requestOptions);
     }
 
     public async modifyAuth(
         request: Scrapybara.BrowserModifyAuthRequest,
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.ModifyBrowserAuthResponse> {
         return await this.fern.browser.modifyAuth(this.instanceId, request, requestOptions);
     }
 
     public async authenticate(
         request: Scrapybara.BrowserAuthenticateRequest,
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.BrowserAuthenticateResponse> {
         return await this.fern.browser.authenticate(this.instanceId, request, requestOptions);
     }
 
     public async getStreamUrl(
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ): Promise<Scrapybara.BrowserGetStreamUrlResponse> {
         return await this.fern.browser.getStreamUrl(this.instanceId, requestOptions);
     }
 
-    public async stop(requestOptions?: FernClient.RequestOptions): Promise<Scrapybara.StopBrowserResponse> {
+    public async stop(requestOptions?: ScrapybaraClientRequestOptions): Promise<Scrapybara.StopBrowserResponse> {
         return await this.fern.browser.stop(this.instanceId, requestOptions);
     }
 }
@@ -890,7 +924,7 @@ export class Code {
         private readonly fern: FernClient,
     ) {}
 
-    public async execute(request: Scrapybara.CodeExecuteRequest, requestOptions?: FernClient.RequestOptions) {
+    public async execute(request: Scrapybara.CodeExecuteRequest, requestOptions?: ScrapybaraClientRequestOptions) {
         return await this.fern.code.execute(this.instanceId, request, requestOptions);
     }
 }
@@ -901,26 +935,26 @@ export class Notebook {
         private readonly fern: FernClient,
     ) {}
 
-    public async listKernels(requestOptions?: FernClient.RequestOptions) {
+    public async listKernels(requestOptions?: ScrapybaraClientRequestOptions) {
         return await this.fern.notebook.listKernels(this.instanceId, requestOptions);
     }
 
-    public async create(request: Scrapybara.CreateNotebookRequest, requestOptions?: FernClient.RequestOptions) {
+    public async create(request: Scrapybara.CreateNotebookRequest, requestOptions?: ScrapybaraClientRequestOptions) {
         return await this.fern.notebook.create(this.instanceId, request, requestOptions);
     }
 
-    public async get(notebookId: string, requestOptions?: FernClient.RequestOptions) {
+    public async get(notebookId: string, requestOptions?: ScrapybaraClientRequestOptions) {
         return await this.fern.notebook.get(this.instanceId, notebookId, requestOptions);
     }
 
-    public async delete(notebookId: string, requestOptions?: FernClient.RequestOptions) {
+    public async delete(notebookId: string, requestOptions?: ScrapybaraClientRequestOptions) {
         return await this.fern.notebook.delete(this.instanceId, notebookId, requestOptions);
     }
 
     public async addCell(
         notebookId: string,
         request: Scrapybara.AddCellRequest,
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ) {
         return await this.fern.notebook.addCell(this.instanceId, notebookId, request, requestOptions);
     }
@@ -929,7 +963,7 @@ export class Notebook {
         notebookId: string,
         cellId: string,
         request: Scrapybara.ExecuteCellRequest,
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ) {
         return await this.fern.notebook.executeCell(this.instanceId, notebookId, cellId, request, requestOptions);
     }
@@ -937,7 +971,7 @@ export class Notebook {
     public async execute(
         notebookId: string,
         request: Scrapybara.ExecuteCellRequest,
-        requestOptions?: FernClient.RequestOptions,
+        requestOptions?: ScrapybaraClientRequestOptions,
     ) {
         return await this.fern.notebook.execute(this.instanceId, notebookId, request, requestOptions);
     }
@@ -949,15 +983,15 @@ export class Env {
         private readonly fern: FernClient,
     ) {}
 
-    public async set(request: Scrapybara.EnvSetRequest, requestOptions?: FernClient.RequestOptions) {
+    public async set(request: Scrapybara.EnvSetRequest, requestOptions?: ScrapybaraClientRequestOptions) {
         return await this.fern.env.set(this.instanceId, request, requestOptions);
     }
 
-    public async get(requestOptions?: FernClient.RequestOptions) {
+    public async get(requestOptions?: ScrapybaraClientRequestOptions) {
         return await this.fern.env.get(this.instanceId, requestOptions);
     }
 
-    public async delete(request: Scrapybara.EnvDeleteRequest, requestOptions?: FernClient.RequestOptions) {
+    public async delete(request: Scrapybara.EnvDeleteRequest, requestOptions?: ScrapybaraClientRequestOptions) {
         return await this.fern.env.delete(this.instanceId, request, requestOptions);
     }
 }
@@ -974,11 +1008,17 @@ function _filterImages(messages: Message[], imagesToKeep: number) {
         if (msg.role === "tool" && Array.isArray(msg.content)) {
             for (let j = msg.content.length - 1; j >= 0; j--) {
                 const toolResult = msg.content[j];
-                if (toolResult && toolResult.result && toolResult.result.base64Image) {
+                if (
+                    toolResult &&
+                    toolResult.result &&
+                    typeof toolResult.result === "object" &&
+                    toolResult.result !== null &&
+                    "base64Image" in toolResult.result
+                ) {
                     if (imagesKept < imagesToKeep) {
                         imagesKept++;
                     } else {
-                        delete toolResult.result.base64Image;
+                        delete (toolResult.result as { base64Image?: string }).base64Image;
                     }
                 }
             }

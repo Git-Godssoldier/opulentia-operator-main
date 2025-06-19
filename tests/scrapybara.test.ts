@@ -1,4 +1,4 @@
-import { test, expect, vi } from '@playwright/test';
+https://docs.scrapybara.com/act-sdk import { test, expect, vi } from '@playwright/test';
 import { ScrapybaraClient, RunnableTool } from '../lib/scrapybara';
 import * as core from '../lib/scrapybara/core';
 
