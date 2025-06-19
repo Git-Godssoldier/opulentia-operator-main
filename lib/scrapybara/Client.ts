@@ -14,6 +14,11 @@ import { Code } from "./api/resources/code/client/Client";
 import { Notebook } from "./api/resources/notebook/client/Client";
 import { Env } from "./api/resources/env/client/Client";
 import { BetaVmManagement } from "./api/resources/betaVmManagement/client/Client";
+import { Tool, AssistantMessage, ToolMessage, Step, ActResponse, SingleActRequest, convertRequestToApi, convertResponseToSdk } from "./api/types";
+
+export type RunnableTool<T> = Tool & {
+    execute: (args: any) => Promise<T> | T;
+};
 
 export declare namespace ScrapybaraClient {
     export interface Options {
@@ -42,6 +47,124 @@ export class ScrapybaraClient {
     protected _betaVmManagement: BetaVmManagement | undefined;
 
     constructor(protected readonly _options: ScrapybaraClient.Options = {}) {}
+
+    public async act<T>(
+        request: SingleActRequest,
+        options: {
+            tools?: RunnableTool<T>[];
+            onAssistantMessage?: (message: AssistantMessage) => Promise<void> | void;
+            onToolMessage?: (message: ToolMessage) => Promise<void> | void;
+            onStep?: (step: Step) => Promise<void> | void;
+            imagesToKeep?: number;
+        } = {}
+    ): Promise<ActResponse<T>> {
+        const { tools, onAssistantMessage, onToolMessage, onStep, imagesToKeep } = options;
+        const messages = [...(request.messages ?? [])];
+
+        while (true) {
+            const apiRequest = convertRequestToApi({ ...request, messages, tools });
+            const _response = await core.fetcher({
+                url: urlJoin(
+                    (await core.Supplier.get(this._options.environment)) ?? environments.ScrapybaraEnvironment.Production,
+                    "act"
+                ),
+                method: "POST",
+                headers: {
+                    "X-Fern-Language": "JavaScript",
+                    "X-Fern-SDK-Name": "scrapybara",
+                    "X-Fern-SDK-Version": "2.6.0-beta.5",
+                    "User-Agent": "scrapybara/2.6.0-beta.5",
+                    "X-Fern-Runtime": core.RUNTIME.type,
+                    "X-Fern-Runtime-Version": core.RUNTIME.version,
+                    ...(await this._getCustomAuthorizationHeaders()),
+                },
+                contentType: "application/json",
+                requestType: "json",
+                body: apiRequest,
+            });
+
+            if (!_response.ok) {
+                if (_response.error.reason === "status-code") {
+                    throw new errors.ScrapybaraError({
+                        statusCode: _response.error.statusCode,
+                        body: _response.error.body,
+                    });
+                }
+
+                switch (_response.error.reason) {
+                    case "non-json":
+                        throw new errors.ScrapybaraError({
+                            statusCode: _response.error.statusCode,
+                            body: _response.error.rawBody,
+                        });
+                    case "timeout":
+                        throw new errors.ScrapybaraTimeoutError("Timeout exceeded when calling POST /act.");
+                    case "unknown":
+                        throw new errors.ScrapybaraError({
+                            message: _response.error.errorMessage,
+                        });
+                }
+            }
+
+            const sdkResponse = convertResponseToSdk(_response.body as Scrapybara.ApiSingleActResponse);
+            const { message, finishReason, usage } = sdkResponse;
+
+            messages.push(message);
+            if (onAssistantMessage) {
+                await onAssistantMessage(message);
+            }
+
+            const toolCalls = message.content.filter((part) => part.type === "tool-call");
+            if (toolCalls.length === 0 || !tools) {
+                const text = message.content.find((part) => part.type === "text")?.text;
+                return { messages, steps: [], text, usage };
+            }
+
+            const toolResults: ToolMessage = {
+                role: "tool",
+                content: [],
+            };
+
+            for (const toolCall of toolCalls) {
+                if (toolCall.type !== "tool-call") continue;
+
+                const tool = tools.find((t) => t.name === toolCall.toolName);
+                if (!tool) {
+                    toolResults.content.push({
+                        type: "tool-result",
+                        toolCallId: toolCall.toolCallId,
+                        toolName: toolCall.toolName,
+                        result: `Tool not found: ${toolCall.toolName}`,
+                        isError: true,
+                    });
+                    continue;
+                }
+
+                try {
+                    const result = await tool.execute(toolCall.args);
+                    toolResults.content.push({
+                        type: "tool-result",
+                        toolCallId: toolCall.toolCallId,
+                        toolName: toolCall.toolName,
+                        result,
+                    });
+                } catch (error: any) {
+                    toolResults.content.push({
+                        type: "tool-result",
+                        toolCallId: toolCall.toolCallId,
+                        toolName: toolCall.toolName,
+                        result: error.message,
+                        isError: true,
+                    });
+                }
+            }
+
+            messages.push(toolResults);
+            if (onToolMessage) {
+                await onToolMessage(toolResults);
+            }
+        }
+    }
 
     public get instance(): Instance {
         return (this._instance ??= new Instance(this._options));
@@ -437,5 +560,78 @@ export class ScrapybaraClient {
     protected async _getCustomAuthorizationHeaders() {
         const apiKeyValue = (await core.Supplier.get(this._options.apiKey)) ?? process?.env["SCRAPYBARA_API_KEY"];
         return { "x-api-key": apiKeyValue };
+    }
+}
+
+export class BaseInstance {
+    public readonly id: string;
+    public readonly launchTime: Date;
+    public readonly status: string;
+    protected readonly fern: ScrapybaraClient;
+
+    constructor(id: string, launchTime: Date, status: string, fern: ScrapybaraClient) {
+        this.id = id;
+        this.launchTime = launchTime;
+        this.status = status;
+        this.fern = fern;
+    }
+
+    public async screenshot(
+        requestOptions?: ScrapybaraClient.RequestOptions,
+    ): Promise<Scrapybara.InstanceScreenshotResponse> {
+        return await this.fern.instance.screenshot(this.id, requestOptions);
+    }
+
+    public async getStreamUrl(
+        requestOptions?: ScrapybaraClient.RequestOptions,
+    ): Promise<Scrapybara.InstanceGetStreamUrlResponse> {
+        return await this.fern.instance.getStreamUrl(this.id, requestOptions);
+    }
+
+    public async computer(
+        request: Scrapybara.Request,
+        requestOptions?: ScrapybaraClient.RequestOptions,
+    ): Promise<Scrapybara.ComputerResponse> {
+        return await this.fern.instance.computer(this.id, request, requestOptions);
+    }
+
+    public async pause(requestOptions?: ScrapybaraClient.RequestOptions): Promise<Scrapybara.StopInstanceResponse> {
+        return await this.fern.instance.pause(this.id, requestOptions);
+    }
+
+    public async resume(
+        request: Scrapybara.InstanceResumeRequest = {},
+        requestOptions?: ScrapybaraClient.RequestOptions,
+    ): Promise<Scrapybara.GetInstanceResponse> {
+        return await this.fern.instance.resume(this.id, request, requestOptions);
+    }
+
+    public async rescheduleTermination(
+        request: Scrapybara.InstanceRescheduleTerminationRequest = {},
+        requestOptions?: ScrapybaraClient.RequestOptions,
+    ): Promise<Scrapybara.StopInstanceResponse> {
+        return await this.fern.instance.rescheduleTermination(this.id, request, requestOptions);
+    }
+
+    public async upload(
+        file: File | Blob | any,
+        request: Scrapybara.BodyUploadV1InstanceInstanceIdUploadPost,
+        requestOptions?: ScrapybaraClient.RequestOptions
+    ): Promise<Scrapybara.UploadResponse> {
+        return await this.fern.instance.upload(file, this.id, request, requestOptions);
+    }
+
+    public async exposePort(
+        request: Scrapybara.ExposePortRequest,
+        requestOptions?: ScrapybaraClient.RequestOptions
+    ): Promise<Scrapybara.ExposePortResponse> {
+        return await this.fern.instance.exposePort(this.id, request, requestOptions);
+    }
+
+    public async deployToNetlify(
+        request: Scrapybara.NetlifyDeployRequest,
+        requestOptions?: ScrapybaraClient.RequestOptions
+    ): Promise<Scrapybara.NetlifyDeployResponse> {
+        return await this.fern.instance.deployToNetlify(this.id, request, requestOptions);
     }
 }

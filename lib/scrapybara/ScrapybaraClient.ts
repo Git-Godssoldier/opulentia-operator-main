@@ -35,6 +35,7 @@ import {
     WINDOWS_SYSTEM_PROMPT as ANTHROPIC_WINDOWS_SYSTEM_PROMPT,
     STRUCTURED_OUTPUT_SECTION as ANTHROPIC_STRUCTURED_OUTPUT_SECTION,
 } from "./anthropic";
+import { chromium, Browser as PlaywrightBrowser, BrowserContext, Page } from "playwright";
 
 function structuredOutputTool<T extends z.ZodType>(schema: T) {
     return {
@@ -578,6 +579,32 @@ export class ScrapybaraClient {
     }
 }
 
+/** Commands for interacting with a remote browser instance. */
+export type BrowserCommand = {
+    /** The browser command to execute. */
+    command:
+        | "go_to"
+        | "get_html"
+        | "evaluate"
+        | "click"
+        | "type"
+        | "screenshot"
+        | "get_text"
+        | "get_attribute";
+    /** URL for go_to command. */
+    url?: string;
+    /** CSS selector for element operations. */
+    selector?: string;
+    /** JavaScript code for evaluate command. */
+    code?: string;
+    /** Text to type for type command. */
+    text?: string;
+    /** Timeout in milliseconds for operations. */
+    timeout?: number;
+    /** Attribute to get for get_attribute command. */
+    attribute?: string;
+};
+
 export class BaseInstance {
     public readonly id: string;
     public readonly launchTime: Date;
@@ -706,6 +733,59 @@ export class UbuntuInstance extends BaseInstance {
 export class BrowserInstance extends BaseInstance {
     constructor(id: string, launchTime: Date, status: string, fern: FernClient) {
         super(id, launchTime, status, fern);
+    }
+
+    private _pwBrowser?: PlaywrightBrowser;
+    private _pwContext?: BrowserContext;
+    private _pwPage?: Page;
+
+    public async browser(
+        request: BrowserCommand,
+        requestOptions?: FernClient.RequestOptions,
+    ): Promise<any> {
+        if (!this._pwBrowser) {
+            const { cdpUrl } = await this.fern.browser.getCdpUrl(this.id, requestOptions);
+            this._pwBrowser = await chromium.connectOverCDP(cdpUrl);
+            const contexts = this._pwBrowser.contexts();
+            this._pwContext = contexts.length > 0 ? contexts[0] : await this._pwBrowser.newContext();
+            this._pwPage = this._pwContext.pages()[0] ?? await this._pwContext.newPage();
+        }
+        if (!this._pwPage) {
+            if (!this._pwContext) throw new Error("Browser context not initialized");
+            this._pwPage = await this._pwContext.newPage();
+        }
+
+        const timeout = request.timeout;
+        switch (request.command) {
+            case "go_to":
+                if (!request.url) throw new Error("Missing 'url' for go_to command");
+                return await this._pwPage.goto(request.url, { timeout });
+            case "get_html":
+                return await this._pwPage.content();
+            case "evaluate":
+                if (request.code === undefined) throw new Error("Missing 'code' for evaluate command");
+                return await this._pwPage.evaluate(request.code);
+            case "click":
+                if (!request.selector) throw new Error("Missing 'selector' for click command");
+                return await this._pwPage.click(request.selector, { timeout });
+            case "type":
+                if (!request.selector) throw new Error("Missing 'selector' for type command");
+                if (request.text === undefined) throw new Error("Missing 'text' for type command");
+                return await this._pwPage.type(request.selector, request.text, { timeout });
+            case "get_text":
+                if (!request.selector) throw new Error("Missing 'selector' for get_text command");
+                return await this._pwPage.textContent(request.selector);
+            case "get_attribute":
+                if (!request.selector) throw new Error("Missing 'selector' for get_attribute command");
+                if (!request.attribute) throw new Error("Missing 'attribute' for get_attribute command");
+                return await this._pwPage.getAttribute(request.selector, request.attribute);
+            case "screenshot": {
+                const buffer = await this._pwPage.screenshot({ timeout });
+                return buffer.toString("base64");
+            }
+            default:
+                throw new Error(`Unsupported browser command: ${request.command}`);
+        }
     }
 
     public async getCdpUrl(requestOptions?: FernClient.RequestOptions): Promise<Scrapybara.BrowserGetCdpUrlResponse> {

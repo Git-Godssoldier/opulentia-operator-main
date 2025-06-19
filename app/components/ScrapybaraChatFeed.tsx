@@ -43,11 +43,8 @@ export default function ScrapybaraChatFeed({
   onClose 
 }: ScrapybaraChatFeedProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [aiProvider, setAiProvider] = useState<"anthropic" | "openai">("openai");
   const [instanceType, setInstanceType] = useState<"ubuntu" | "browser" | "windows">("browser");
   const [useStructuredOutput, setUseStructuredOutput] = useState(false);
-  const [modelType, setModelType] = useState<"auto" | "reasoning" | "fast" | "standard">("auto");
-  const [computeLevel, setComputeLevel] = useState<"low" | "medium" | "high">("medium");
   const { width } = useWindowSize();
   const isMobile = width ? width < 768 : false;
   const initializationRef = useRef(false);
@@ -121,11 +118,11 @@ export default function ScrapybaraChatFeed({
           posthog.capture("scrapybara_act_instance_started", {
             goal: initialMessage,
             sessionId,
-            aiProvider,
+            aiProvider: "anthropic",
             instanceType,
           });
 
-          // Step 2: Execute the agent with O3/O4-mini enhanced capabilities
+          // Step 2: Execute the agent with Claude 4 Sonnet enhanced capabilities
           const executeResponse = await fetch("/api/scrapybara-agent", {
             method: "POST",
             headers: {
@@ -135,10 +132,8 @@ export default function ScrapybaraChatFeed({
               action: "EXECUTE",
               sessionId,
               goal: initialMessage,
-              aiProvider,
+              aiProvider: "anthropic",
               useStructuredOutput,
-              modelType: modelType === "auto" ? undefined : modelType,
-              computeLevel,
             }),
           });
 
@@ -154,7 +149,7 @@ export default function ScrapybaraChatFeed({
 
             posthog.capture("scrapybara_act_execution_completed", {
               sessionId,
-              aiProvider,
+              aiProvider: "anthropic",
               steps: executeData.result.steps.length,
               usage: executeData.result.usage,
               hasStructuredOutput: !!executeData.result.output,
@@ -180,7 +175,7 @@ export default function ScrapybaraChatFeed({
     };
 
     initializeAndExecuteAgent();
-  }, [initialMessage, aiProvider, instanceType, useStructuredOutput]);
+  }, [initialMessage, instanceType, useStructuredOutput]);
 
   const stopSession = async () => {
     if (uiState.sessionId) {
@@ -269,7 +264,7 @@ export default function ScrapybaraChatFeed({
           />
           <span className="font-ppneue text-[#EFEFEF]">Opulentia Operator</span>
           <span className="px-2 py-1 bg-[#FFAA6E] text-[#0F0F0F] rounded-full text-xs font-medium">
-            O3/O4-mini Enhanced
+            Claude 4 Sonnet Enhanced
           </span>
           {uiState.instanceType && (
             <span className="px-2 py-1 bg-[#4ECDC4] text-[#0F0F0F] rounded-full text-xs font-medium">
@@ -288,40 +283,9 @@ export default function ScrapybaraChatFeed({
             <option value="ubuntu">Ubuntu Instance</option>
             <option value="windows">Windows Instance</option>
           </select>
-          <select
-            value={aiProvider}
-            onChange={(e) => setAiProvider(e.target.value as "anthropic" | "openai")}
-            className="px-3 py-1 border border-[#080808] bg-[#1B1B1B] text-[#EFEFEF] rounded-[0.625rem] text-sm"
-            disabled={isLoading}
-          >
-            <option value="anthropic">Claude 4 Sonnet</option>
-            <option value="openai">OpenAI Models</option>
-          </select>
-          {aiProvider === "openai" && (
-            <select
-              value={modelType}
-              onChange={(e) => setModelType(e.target.value as "auto" | "reasoning" | "fast" | "standard")}
-              className="px-3 py-1 border border-[#080808] bg-[#1B1B1B] text-[#EFEFEF] rounded-[0.625rem] text-sm"
-              disabled={isLoading}
-            >
-              <option value="auto">🤖 Auto-Select</option>
-              <option value="reasoning">🧠 O3 (Extended Thinking)</option>
-              <option value="fast">⚡ O4-mini (Fast & Efficient)</option>
-              <option value="standard">⚖️ GPT-4.1 (Balanced)</option>
-            </select>
-          )}
-          {aiProvider === "openai" && modelType === "reasoning" && (
-            <select
-              value={computeLevel}
-              onChange={(e) => setComputeLevel(e.target.value as "low" | "medium" | "high")}
-              className="px-3 py-1 border border-[#080808] bg-[#1B1B1B] text-[#EFEFEF] rounded-[0.625rem] text-sm"
-              disabled={isLoading}
-            >
-              <option value="low">Low Compute</option>
-              <option value="medium">Medium Compute</option>
-              <option value="high">High Compute</option>
-            </select>
-          )}
+          <div className="px-3 py-1 border border-[#080808] bg-[#1B1B1B] text-[#EFEFEF] rounded-[0.625rem] text-sm">
+            🧠 Claude 4 Sonnet
+          </div>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"

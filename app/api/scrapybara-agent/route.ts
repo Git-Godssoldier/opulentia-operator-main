@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { anthropic } from "@ai-sdk/anthropic";
-import { openai } from "@ai-sdk/openai";
+// import { openai } from "@ai-sdk/openai";
 import { CoreMessage, generateObject, LanguageModelV1, UserContent } from "ai";
 import { ScrapybaraClient } from "../../../lib/scrapybara";
 import { z } from "zod";
@@ -84,7 +84,7 @@ const getTokenBudget = () => {
   };
 };
 
-// Enhanced system prompts with O3-specific problem decomposition patterns
+// Enhanced system prompts with Claude 4 Sonnet problem decomposition patterns
 const SYSTEM_PROMPTS = {
   ubuntu: `You are an expert computer use agent operating in an Ubuntu Linux environment. You can:
 - Execute bash commands to interact with the system
@@ -118,8 +118,8 @@ Always start with a screenshot and then take concrete actions to fulfill the use
 Always be careful with system-level operations and explain your actions clearly.`
 };
 
-// O3-specific problem decomposition patterns
-const O3_DECOMPOSITION_PATTERNS = {
+// Claude 4 Sonnet problem decomposition patterns
+const CLAUDE_DECOMPOSITION_PATTERNS = {
   mathematical: `For mathematical problems, follow this extended reasoning pattern:
 1. **Problem Analysis**: Break down the problem into its fundamental components
 2. **Strategy Selection**: Choose the most appropriate mathematical approach
@@ -152,8 +152,8 @@ const O3_DECOMPOSITION_PATTERNS = {
 6. **Monitoring**: Verify successful completion`
 };
 
-// O3 step-by-step verification patterns
-const O3_VERIFICATION_PATTERNS = {
+// Claude 4 Sonnet step-by-step verification patterns
+const CLAUDE_VERIFICATION_PATTERNS = {
   execution_check: `After each step, verify:
 - Did the action complete as expected?
 - Are there any error messages or unexpected outcomes?
@@ -194,12 +194,12 @@ EXTENDED REASONING APPROACH:
 - Verify your reasoning at each step
 - Use deliberative alignment to ensure safe and correct actions
 
-${taskType && O3_DECOMPOSITION_PATTERNS[taskType as keyof typeof O3_DECOMPOSITION_PATTERNS] 
-  ? `\nTASK-SPECIFIC GUIDANCE:\n${O3_DECOMPOSITION_PATTERNS[taskType as keyof typeof O3_DECOMPOSITION_PATTERNS]}`
+${taskType && CLAUDE_DECOMPOSITION_PATTERNS[taskType as keyof typeof CLAUDE_DECOMPOSITION_PATTERNS] 
+  ? `\nTASK-SPECIFIC GUIDANCE:\n${CLAUDE_DECOMPOSITION_PATTERNS[taskType as keyof typeof CLAUDE_DECOMPOSITION_PATTERNS]}`
   : ''
 }
 
-${O3_VERIFICATION_PATTERNS.execution_check}`;
+${CLAUDE_VERIFICATION_PATTERNS.execution_check}`;
   } else if (complexity === "simple") {
     // Add efficiency guidance for simple tasks
     basePrompt += `\n\nFor this simple task, focus on efficiency:
@@ -228,6 +228,24 @@ const createStructuredSchema = () => {
   });
 };
 
+// Define the enhanced step result type
+interface EnhancedStepResult {
+  text: string;
+  reasoning: string;
+  tool: string;
+  instruction: string;
+  expectedOutcome?: string;
+  verification?: string;
+  fallbackAction?: string;
+  confidence?: number;
+  taskComplexity?: string;
+  stepNumber?: number;
+  result?: any;
+  modelUsed: string;
+  tokenBudget: any;
+  claudeConfig: any;
+}
+
 // Enhanced step generation with Claude 4 Sonnet
 async function generateEnhancedStep({
   goal,
@@ -239,7 +257,7 @@ async function generateEnhancedStep({
   sessionID: string;
   instanceType: "ubuntu" | "browser" | "windows";
   previousSteps?: any[];
-}) {
+}): Promise<EnhancedStepResult> {
   // Analyze task complexity for optimal prompting
   const complexity = analyzeTaskComplexity(goal, previousSteps);
   const model = getModel();
@@ -270,7 +288,13 @@ ${previousSteps.length > 0
   : ''
 }
 
-Based on the goal and any previous steps, determine the next action to take. 
+Based on the goal and any previous steps, determine the next action to take.
+
+STEP REQUIREMENTS:
+- If this is step 1 and instanceType is "browser", you MUST use SCREENSHOT first
+- If you haven't taken a screenshot yet, use SCREENSHOT
+- If you haven't navigated to a website yet, use COMPUTER_ACTION to navigate
+- Only use CLOSE_INSTANCE after you have successfully completed the browser task 
 
 ${complexity === 'complex' ? `
 🧠 EXTENDED REASONING MODE:
@@ -279,6 +303,7 @@ ${complexity === 'complex' ? `
 - Verify your reasoning before proposing the action
 - Break down complex operations into logical sub-steps
 - Apply domain-specific decomposition patterns for ${taskType} tasks
+- ALWAYS start with SCREENSHOT for browser tasks to see the current state
 ` : complexity === 'simple' ? `
 ⚡ EFFICIENT MODE:
 - Focus on efficient, direct actions
@@ -295,10 +320,23 @@ Consider the Act SDK principles:
 5. Verify each step before proceeding
 
 For browser tasks specifically:
-- ALWAYS start with SCREENSHOT to see current state
+- ALWAYS start with SCREENSHOT to see current state  
 - Use COMPUTER_ACTION to navigate, search, and interact
-- Don't use CLOSE_INSTANCE until you have found and extracted the requested information
 - Take multiple screenshots throughout to track progress
+- For questions like "How many wins do the 49ers have?" you MUST:
+  1. Take SCREENSHOT first
+  2. Navigate to Google or ESPN using COMPUTER_ACTION
+  3. Search for "49ers wins 2024" or similar
+  4. Extract the information from the results
+  5. Continue until you find the answer
+
+CRITICAL RULES:
+- NEVER use CLOSE_INSTANCE as your first step!
+- NEVER use CLOSE_INSTANCE until you have completed the actual browser automation
+- You must take at least 3-5 browser actions before considering the task complete
+- ALWAYS perform the actual web search and information extraction
+
+IMPORTANT: Do NOT just provide a text response without taking browser actions!
 
 Choose the most appropriate tool and provide a clear instruction.`,
     },
@@ -344,14 +382,14 @@ Choose the most appropriate tool and provide a clear instruction.`,
 
   // Add metadata about model selection and reasoning
   const enhancedResult = {
-    ...result.object,
+    ...(result.object as Record<string, any>),
     modelUsed: "claude-sonnet-4-20250514",
     taskComplexity: complexity,
     tokenBudget: tokenBudget,
     claudeConfig: claudeConfig,
   };
 
-  return enhancedResult;
+  return enhancedResult as EnhancedStepResult;
 }
 
 // Execute step with enhanced error handling
@@ -543,7 +581,7 @@ export async function POST(request: Request) {
         try {
           // Start the appropriate instance type
           let instance;
-          let streamUrl;
+          let streamUrl: any;
           
           switch (instanceType) {
             case "ubuntu":
@@ -564,7 +602,7 @@ export async function POST(request: Request) {
           activeSessions.set(sessionId, {
             instance,
             instanceType,
-            streamUrl: streamUrl as string,
+            streamUrl: streamUrl.streamUrl,
             goal,
             steps: [],
             useStructuredOutput,
@@ -572,7 +610,7 @@ export async function POST(request: Request) {
 
           return NextResponse.json({
             success: true,
-            sessionUrl: streamUrl as string,
+            sessionUrl: streamUrl.streamUrl,
             instanceId: instance.id,
             instanceType,
             message: `Started ${instanceType} instance with Act SDK-inspired agent`,
@@ -612,6 +650,7 @@ export async function POST(request: Request) {
 
           while (stepCount < maxSteps) {
             // Generate next step with Claude 4 Sonnet
+            console.log(`Generating step ${stepCount + 1} for goal: "${goal}"`);
             const nextStep = await generateEnhancedStep({
               goal,
               sessionID: sessionId,
@@ -619,26 +658,45 @@ export async function POST(request: Request) {
               previousSteps: currentSteps,
             });
 
+            console.log(`Generated step ${stepCount + 1}: ${nextStep.tool} - ${nextStep.text}`);
             nextStep.stepNumber = stepCount + 1;
             steps.push(nextStep);
             currentSteps.push(nextStep);
 
             // Execute step
+            console.log(`Executing step ${stepCount + 1}: ${nextStep.tool}`);
             const execution = await executeEnhancedStep({
               sessionID: sessionId,
               step: nextStep,
               instanceType: session.instanceType,
             });
 
+            console.log(`Step ${stepCount + 1} execution result:`, execution.success ? 'SUCCESS' : 'FAILED', execution.error || '');
             nextStep.result = execution;
 
-            // Check if we should stop
-            if (nextStep.tool === "CLOSE_INSTANCE" || !execution.success) {
+            // For browser tasks, don't stop until we have multiple steps and have actually performed actions
+            if (nextStep.tool === "CLOSE_INSTANCE" && stepCount >= 2) {
+              console.log(`Stopping after ${stepCount + 1} steps - CLOSE_INSTANCE encountered`);
+              break;
+            }
+            
+            // Prevent early termination on first few steps
+            if (nextStep.tool === "CLOSE_INSTANCE" && stepCount < 2) {
+              console.log(`Ignoring early CLOSE_INSTANCE on step ${stepCount + 1} - continuing execution`);
+              // Continue instead of breaking
+            }
+            
+            // For browser automation, continue even if some steps fail
+            // Only stop early if we get a critical error (session not found, etc.)
+            if (!execution.success && execution.error && execution.error.includes("No active session")) {
+              console.log(`Critical error - no active session found`);
               break;
             }
 
             stepCount++;
           }
+          
+          console.log(`Completed execution with ${steps.length} total steps`);
 
           // Generate final result with optional structured output
           let finalResult: any = {
