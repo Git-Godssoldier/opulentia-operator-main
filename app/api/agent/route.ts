@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { anthropic } from "@ai-sdk/anthropic";
+import { google } from "@ai-sdk/google";
 import { CoreMessage, generateObject, LanguageModelV1, UserContent } from "ai";
 import { z } from "zod";
 import { ObserveResult, Stagehand } from "@browserbasehq/stagehand";
 
-const LLMClient = anthropic("claude-4-sonnet-20250514");
+const LLMClient = google("gemini-1.5-flash-preview");
 
 type Step = {
   text: string;
@@ -33,7 +33,7 @@ async function runStagehand({
   const stagehand = new Stagehand({
     browserbaseSessionID: sessionID,
     env: "BROWSERBASE",
-    modelName: "google/gemini-2.0-flash",
+    modelName: "google/gemini-1.5-flash-preview",
     disablePino: true,
   });
   await stagehand.init();
@@ -107,7 +107,7 @@ async function sendPrompt({
       browserbaseSessionID: sessionID,
       env: "BROWSERBASE",
       disablePino: true,
-      modelName: "google/gemini-2.0-flash",
+      modelName: "google/gemini-1.5-flash-preview",
     });
     await stagehand.init();
     currentUrl = await stagehand.page.url();
