@@ -401,7 +401,7 @@ export class ScrapybaraClient {
                                 `${ANTHROPIC_STRUCTURED_OUTPUT_SECTION}\n</SYSTEM_CAPABILITY>`,
                             );
                         }
-                    } else if (model.provider === "openai") {
+                    } else if (model.provider === "openai" || model.provider === "google" || model.provider === "anthropic") {
                         if (
                             system === OPENAI_UBUNTU_SYSTEM_PROMPT ||
                             system === OPENAI_BROWSER_SYSTEM_PROMPT ||
@@ -1005,20 +1005,14 @@ function _filterImages(messages: Message[], imagesToKeep: number) {
     let imagesKept = 0;
     for (let i = messages.length - 1; i >= 0; i--) {
         const msg = messages[i];
-        if (msg.role === "tool" && Array.isArray(msg.content)) {
+        if (Array.isArray(msg.content)) {
             for (let j = msg.content.length - 1; j >= 0; j--) {
-                const toolResult = msg.content[j];
-                if (
-                    toolResult &&
-                    toolResult.result &&
-                    typeof toolResult.result === "object" &&
-                    toolResult.result !== null &&
-                    "base64Image" in toolResult.result
-                ) {
+                const part = msg.content[j];
+                if (part.type === "image") {
                     if (imagesKept < imagesToKeep) {
                         imagesKept++;
                     } else {
-                        delete (toolResult.result as { base64Image?: string }).base64Image;
+                        msg.content.splice(j, 1);
                     }
                 }
             }

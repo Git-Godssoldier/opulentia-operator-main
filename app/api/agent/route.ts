@@ -1,10 +1,42 @@
 import { NextResponse } from "next/server";
 import { google } from "@ai-sdk/google";
+import { anthropic } from "@ai-sdk/anthropic";
 import { CoreMessage, generateObject, LanguageModelV1, UserContent } from "ai";
 import { z } from "zod";
 import { ObserveResult, Stagehand } from "@browserbasehq/stagehand";
 
-const LLMClient = google("gemini-1.5-flash-preview");
+const models = [
+  anthropic("claude-3-5-sonnet-20240620"),
+  anthropic("claude-3-opus-20240229"),
+  anthropic("claude-3-sonnet-20240229"),
+  anthropic("claude-3-haiku-20240307"),
+  google("gemini-1.5-flash-latest"),
+  google("gemini-1.5-flash-preview"),
+];
+
+async function generateObjectWithFallback<T>({
+  schema,
+  messages,
+}: {
+  schema: z.Schema<T>;
+  messages: CoreMessage[];
+}) {
+  for (const model of models) {
+    try {
+      const result = await generateObject({
+        model: model as LanguageModelV1,
+        schema,
+        messages,
+      });
+      console.log(`Successfully used model: ${model.modelId}`);
+      return result;
+    } catch (error) {
+      console.error(`Error with model ${model.modelId}:`, error);
+      // Try the next model
+    }
+  }
+  throw new Error("All language models failed.");
+}
 
 type Step = {
   text: string;
@@ -33,7 +65,7 @@ async function runStagehand({
   const stagehand = new Stagehand({
     browserbaseSessionID: sessionID,
     env: "BROWSERBASE",
-    modelName: "google/gemini-1.5-flash-preview",
+    modelName: "anthropic/claude-3-5-sonnet-20240620",
     disablePino: true,
   });
   await stagehand.init();
@@ -107,7 +139,7 @@ async function sendPrompt({
       browserbaseSessionID: sessionID,
       env: "BROWSERBASE",
       disablePino: true,
-      modelName: "google/gemini-1.5-flash-preview",
+      modelName: "anthropic/claude-3-5-sonnet-20240620",
     });
     await stagehand.init();
     currentUrl = await stagehand.page.url();
@@ -181,8 +213,7 @@ If the goal has been achieved, return "close".`,
     content,
   };
 
-  const result = await generateObject({
-    model: LLMClient as LanguageModelV1,
+  const result = await generateObjectWithFallback({
     schema: z.object({
       text: z.string(),
       reasoning: z.string(),
@@ -223,8 +254,7 @@ Return a URL that would be most effective for achieving this goal.`,
     ],
   };
 
-  const result = await generateObject({
-    model: LLMClient as LanguageModelV1,
+  const result = await generateObjectWithFallback({
     schema: z.object({
       url: z.string().url(),
       reasoning: z.string(),
